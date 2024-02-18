@@ -288,6 +288,57 @@ Ini adalah perintah SQL untuk membuat trigger *users_trigger* yang akan dipicu s
 
 ![Log Trigger for changes username   password](https://github.com/daraxnailah/uts-pemrograman-PL.SQL/assets/125743006/55192716-9d27-4ebd-93fe-37fcad97966d)
 
+-- Membuat tabel trigger_log_user
+CREATE TABLE IF NOT EXISTS trigger_log_user (
+   log_id serial PRIMARY KEY,
+   users_id VARCHAR(255),
+   changed_field VARCHAR(255),
+   old_value VARCHAR(255),
+   new_value VARCHAR(255),
+   log_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Membuat fungsi log_users_changes untuk digunakan oleh trigger
+CREATE OR REPLACE FUNCTION log_users_changes()
+RETURNS TRIGGER AS $$
+BEGIN
+   IF TG_OP = 'UPDATE' THEN
+       IF NEW.password IS DISTINCT FROM OLD.password THEN
+           INSERT INTO trigger_log_user(users_id, changed_field, old_value, new_value)
+           VALUES(NEW.id::text, 'password', OLD.password, NEW.password);
+       END IF;
+
+       IF NEW.username IS DISTINCT FROM OLD.username THEN
+           INSERT INTO trigger_log_user(users_id, changed_field, old_value, new_value)
+           VALUES(NEW.id::text, 'username', OLD.username, NEW.username);
+       END IF;
+
+       IF NEW.id IS DISTINCT FROM OLD.id THEN
+           INSERT INTO trigger_log_user(users_id, changed_field, old_value, new_value)
+           VALUES(OLD.id::text, 'id', OLD.id::text, NEW.id::text);
+       END IF;
+   ELSIF TG_OP = 'INSERT' THEN
+       INSERT INTO trigger_log_user(users_id, changed_field, old_value, new_value)
+       VALUES(NEW.id::text, 'username', '', NEW.username),
+              (NEW.id::text, 'password', '', NEW.password),
+              (NEW.id::text, 'id', '', NEW.id::text);
+   ELSIF TG_OP = 'DELETE' THEN
+       INSERT INTO trigger_log_user(users_id, changed_field, old_value, new_value)
+       VALUES(OLD.id::text, 'username', OLD.username, ''),
+              (OLD.id::text, 'password', OLD.password, ''),
+              (OLD.id::text, 'id', OLD.id::text, '');
+   END IF;
+
+   RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Membuat trigger users_trigger
+CREATE TRIGGER users_trigger
+AFTER UPDATE ON users
+FOR EACH ROW
+EXECUTE FUNCTION log_users_changes();
+
 - Data Akhir:
 
 ![Data Akhir](https://github.com/daraxnailah/uts-pemrograman-PL.SQL/assets/125743006/cf6039bd-95cc-4f54-b64d-50a13a535fd1)
